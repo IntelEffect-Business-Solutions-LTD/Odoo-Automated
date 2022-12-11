@@ -1,45 +1,48 @@
 #!/bin/bash
 
-# Update apt-get
-sudo apt-get update
+# Update the package list and upgrade the system
+sudo apt update
+sudo apt upgrade -y
 
-# Install dependencies
-sudo apt-get install git python3-pip build-essential wget python3-dev python3-venv python3-wheel libxslt-dev libzip-dev libldap2-dev libsasl2-dev python3-setuptools node-less libxml2-dev
+# Install the necessary dependencies
+sudo apt install -y python3 python3-pip postgresql
 
-# Create a new user for Odoo
+# Create a new user for the Odoo installation
 sudo adduser --system --home=/opt/odoo --group odoo
 
-# Create a directory for the Odoo installation
-sudo mkdir /opt/odoo/odoo-server
+# Install Odoo using pip
+sudo -u odoo pip3 install odoo
 
-# Clone the Odoo repository
-sudo git clone https://www.github.com/odoo/odoo --depth 1 --branch 13.0 /opt/odoo/odoo-server
+# Create a new configuration file for Odoo
+sudo tee /etc/odoo-server.conf <<EOF
+[options]
+; This is the password that allows database operations:
+admin_passwd = admin
+db_host = False
+db_port = False
+db_user = odoo
+db_password = False
+addons_path = /opt/odoo/addons
+EOF
 
-# Create a virtual environment for the Odoo installation
-sudo python3 -m venv /opt/odoo/odoo-server-venv
+# Create a new systemd service file for Odoo
+sudo tee /etc/systemd/system/odoo.service <<EOF
+[Unit]
+Description=Odoo
+After=network.target
 
-# Activate the virtual environment
-source /opt/odoo/odoo-server-venv/bin/activate
+[Service]
+Type=simple
+SyslogIdentifier=odoo
+PermissionsStartOnly=true
+User=odoo
+Group=odoo
+ExecStart=/usr/local/bin/odoo-bin -c /etc/odoo-server.conf
 
-# Install the requirements for Odoo
-pip3 install -r /opt/odoo/odoo-server/requirements.txt
+[Install]
+WantedBy=multi-user.target
+EOF
 
-# Deactivate the virtual environment
-deactivate
-
-# Create a new directory for the custom addons
-sudo mkdir /opt/odoo/odoo-server/custom-addons
-
-# Add the custom addons directory to the Odoo configuration
-echo '' >> /opt/odoo/odoo-server/odoo.conf
-echo '[options]' >> /opt/odoo/odoo-server/odoo.conf
-echo 'addons_path = /opt/odoo/odoo-server/custom-addons,/opt/odoo/odoo-server/odoo/addons' >> /opt/odoo/odoo-server/odoo.conf
-
-# Give the odoo user permission to access the directories
-sudo chown -R odoo: /opt/odoo/
-
-# Create a new system service for Odoo
-sudo touch /etc/systemd/system/odoo.service
-
-# Edit the system service file
-sudo nano /etc/systemd/system/odoo.service
+# Start the Odoo service and enable it to start on boot
+sudo systemctl start odoo
+sudo systemctl enable odoo
